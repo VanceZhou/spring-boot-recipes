@@ -9,20 +9,23 @@ import com.example.recipe.repository.RecipeRepository;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @AllArgsConstructor
 public class RecipeService {
     private final AuthService authService;
     private final RecipeRepository recipeRepository;
-
-    public RecipeDto postRecipe(RecipeDto recipeDto){
+    @Async
+    public CompletableFuture<RecipeDto> postRecipe(RecipeDto recipeDto){
         MyUser currentUser = authService.getCurrentUser();
+        System.out.println(currentUser);
         Recipe recipeToPost = new Recipe(recipeDto);
         recipeToPost.setMyUser(currentUser);
         recipeToPost.setDate(Instant.now());
@@ -30,16 +33,16 @@ public class RecipeService {
         recipeToPost.setComments(null);
         recipeToPost.setNumberOfLikes(0);
         recipeRepository.save(recipeToPost);
-        return recipeDto;
+        return CompletableFuture.completedFuture(recipeDto);
     }
-
-    public Recipe findById(Long id){
+    @Async
+    public CompletableFuture<Recipe> findById(Long id){
         Recipe recipe = recipeRepository.findById(id)
-            .orElseThrow(() -> new IdNotFoundException("ID " + id + "not found!"));
-        return recipe;
+                .orElseThrow(() -> new IdNotFoundException("ID " + id + "not found!"));
+        return CompletableFuture.completedFuture(recipe);
     }
-
-    public ArrayList<Recipe> searchByCategory(String category, String name) {
+    @Async
+    public CompletableFuture<ArrayList<Recipe>> searchByCategory(String category, String name) {
         ArrayList<Recipe> foundRecipe = new ArrayList<>();
         Iterable<Recipe> allRecipes = recipeRepository.findAll();
         if (category != null && name == null) {
@@ -61,10 +64,10 @@ public class RecipeService {
         }
 
         Collections.sort(foundRecipe, Collections.reverseOrder(Comparator.comparing(Recipe::getDate)));
-        return foundRecipe;
+        return CompletableFuture.completedFuture(foundRecipe);
     }
-
-    public ResponseEntity<String> updateRecipe(Long id, RecipeDto recipeDto) {
+    @Async
+    public CompletableFuture<ResponseEntity<String>> updateRecipe(Long id, RecipeDto recipeDto) {
         String currentUsername = authService.getCurrentUser().getUsername();
         Optional<Recipe> recipeOptional = recipeRepository.findById(id);
         if (recipeOptional.isPresent()) {
@@ -78,16 +81,17 @@ public class RecipeService {
                 recipe.setDate();
                 recipeRepository.save(recipe);
 
-                return ResponseEntity.status(HttpStatus.NO_CONTENT).body("Recipe was updated");
+                return CompletableFuture.completedFuture(ResponseEntity.status(HttpStatus.NO_CONTENT).body("Recipe was updated"));
             } else {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Recipe does not belongs to this owner");
+                return CompletableFuture.completedFuture(ResponseEntity.status(HttpStatus.FORBIDDEN).body("Recipe does not belongs to this owner"));
             }
         }
 
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Recipe not found");
+        return CompletableFuture.completedFuture(ResponseEntity.status(HttpStatus.NOT_FOUND).body("Recipe not found"));
 
     }
-    public ResponseEntity<String> deleteRecipe(Long id) {
+    @Async
+    public CompletableFuture<ResponseEntity<String>> deleteRecipe(Long id) {
         MyUser currentUser = authService.getCurrentUser();
         String username = currentUser.getUsername();
 
@@ -96,24 +100,24 @@ public class RecipeService {
         System.out.println("found?");
         if (recipeToDelete != null && recipeToDelete.getMyUser().getUsername().equals(currentUser.getUsername())) {
             recipeRepository.deleteById(id);
-            return ResponseEntity.status(HttpStatus.OK).body("Recipe with id: " + id + " deleted!");
+            return CompletableFuture.completedFuture(ResponseEntity.status(HttpStatus.OK).body("Recipe with id: " + id + " deleted!"));
         } else {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Recipe with id: " + id + " not found!");
+            return CompletableFuture.completedFuture(ResponseEntity.status(HttpStatus.NOT_FOUND).body("Recipe with id: " + id + " not found!"));
         }
 
     }
-    public List<Recipe> findRecipesByUsername(String username){
-//        String username = authService.getCurrentUser().getUsername();
+    @Async
+    public CompletableFuture<List<Recipe>> findRecipesByUsername(String username){
         List<Recipe> recipes = recipeRepository.findByUsername(username)
                 .orElse(null);
         if (recipes != null){
-            return recipes;
+            return CompletableFuture.completedFuture(recipes);
         }
-        return Collections.EMPTY_LIST;
+        return CompletableFuture.completedFuture(Collections.EMPTY_LIST);
     }
-
-    public List<Recipe> getAllRecipe() {
+    @Async
+    public CompletableFuture<List<Recipe>> getAllRecipe() {
         List<Recipe> recipeList = recipeRepository.findAll();
-        return recipeList;
+        return CompletableFuture.completedFuture(recipeList);
     }
 }

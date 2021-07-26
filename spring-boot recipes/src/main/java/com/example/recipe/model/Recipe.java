@@ -49,7 +49,7 @@ public class Recipe implements Serializable {
     @Size(min = 1)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private ArrayList<String> directions;
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "userId", referencedColumnName = "userId")
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private MyUser myUser;

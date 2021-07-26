@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
+import java.util.concurrent.ExecutionException;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -22,8 +23,8 @@ public class AuthController {
     private final RefreshTokenService refreshTokenService;
 // given SignUpRequest to sign up account
     @PostMapping("/signup")
-    public ResponseEntity<String> signUp(@RequestBody SignUpRequest signUpRequest){
-        if (authService.signup(signUpRequest)){
+    public ResponseEntity<String> signUp(@RequestBody SignUpRequest signUpRequest) throws ExecutionException, InterruptedException {
+        if (authService.signup(signUpRequest).get()){
             return new ResponseEntity<>("User successful registered!", HttpStatus.OK);
         }
         return new ResponseEntity<>("The account with the same username already exist!", HttpStatus.BAD_REQUEST);
@@ -36,8 +37,8 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public AuthenticationResponse login(@RequestBody LoginRequest loginRequest){
-        return authService.login(loginRequest);
+    public AuthenticationResponse login(@RequestBody LoginRequest loginRequest) throws ExecutionException, InterruptedException {
+        return authService.login(loginRequest).get();
     }
 
     @PostMapping("refresh/token")

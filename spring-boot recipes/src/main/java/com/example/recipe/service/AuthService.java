@@ -6,6 +6,7 @@ import com.example.recipe.DataTransferObj.RefreshTokenRequest;
 import com.example.recipe.DataTransferObj.SignUpRequest;
 import com.example.recipe.exceptions.recipeEmailSendingException;
 import com.example.recipe.model.MyUser;
+import com.example.recipe.model.MyUserDetails;
 import com.example.recipe.model.NotificationEmail;
 import com.example.recipe.model.VerificationToken;
 import com.example.recipe.repository.MyUserRepository;
@@ -13,24 +14,29 @@ import com.example.recipe.repository.VerificationTokenRepository;
 import com.example.recipe.security.JwtProvider;
 import lombok.AllArgsConstructor;
 
+import org.springframework.context.annotation.Bean;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.task.DelegatingSecurityContextAsyncTaskExecutor;
 import org.springframework.stereotype.Service;
 
 import javax.transaction.Transactional;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 
 @AllArgsConstructor
 public class AuthService {
-//    better practice to use constructor than autowired
+    //    better practice to use constructor than autowired
     private final PasswordEncoder passwordEncoder;
     private final MyUserRepository myUserRepository;
     private final VerificationTokenRepository verificationTokenRepository;
@@ -39,14 +45,20 @@ public class AuthService {
     private final JwtProvider jwtProvider;
     private final RefreshTokenService refreshTokenService;
 
+    //    by default, the SecurityContextHolder is bounded to local thread, if we wanna use it in multi-thread, we need to create following bean
+    @Bean
+    public DelegatingSecurityContextAsyncTaskExecutor taskExecutor(ThreadPoolTaskExecutor delegate) {
+        return new DelegatingSecurityContextAsyncTaskExecutor(delegate);
+    }
 
     @Transactional
-    public boolean signup(SignUpRequest signUpRequest){
+    @Async
+    public CompletableFuture<Boolean> signup(SignUpRequest signUpRequest){
 //       Check if username already exist before sign up.
         MyUser signupUser = myUserRepository.findByUsername(signUpRequest.getUsername())
                 .orElse(null);
         if (signupUser != null){
-            return false;
+            return CompletableFuture.completedFuture(false);
         }
 //        Using the password encoder to encode the password before save it into database.
         signUpRequest.setPassword(passwordEncoder.encode(signUpRequest.getPassword()));
@@ -57,16 +69,14 @@ public class AuthService {
         String token = generateVerificationToken(myUSer);
         mailService.sendMail(new NotificationEmail("please activate your account!", myUSer.getEmail(),
                 "please click on the link to activate your account: " + "http://localhost:8080/api/auth/accountVerification/" + token));
-        return true;
+        return CompletableFuture.completedFuture(true);
     }
-// verification token is used to send to user email and verify the sign up info. not JWT
+    // verification token is used to send to user email and verify the sign up info. not JWT
     private String generateVerificationToken(MyUser myUSer) {
         String token = UUID.randomUUID().toString();
         VerificationToken verificationToken = new VerificationToken();
         verificationToken.setToken(token);
         verificationToken.setMyUser(myUSer);
-//        TODO: add expiration date later.
-
         verificationTokenRepository.save(verificationToken);
         return token;
     }
@@ -83,7 +93,8 @@ public class AuthService {
         myUserRepository.save(userToActivate.get());
     }
 
-    public AuthenticationResponse login(LoginRequest loginRequest){
+    @Async
+    public CompletableFuture<AuthenticationResponse> login(LoginRequest loginRequest){
 //        use username and password tp generate authentication.
         Authentication authentication = authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(loginRequest.getUsername(), loginRequest.getPassword()));
         SecurityContextHolder.getContext().setAuthentication(authentication);
@@ -91,7 +102,7 @@ public class AuthService {
         Instant expirationDate = Instant.now().plusMillis(jwtProvider.getJwtExpirationInMillis());
 //        generate an AuthenticationResponse with jwtToken and expiration date.
         String refreshToken = refreshTokenService.generateRefreshToken().getToken();
-        return new AuthenticationResponse(jwtToken, loginRequest.getUsername(),refreshToken , expirationDate);
+        return CompletableFuture.completedFuture(new AuthenticationResponse(jwtToken, loginRequest.getUsername(),refreshToken , expirationDate));
     }
 
     @Transactional
@@ -102,7 +113,7 @@ public class AuthService {
         return currentUser;
     }
 
-//get a RefreshTokenRequest with refresh token and username
+    //get a RefreshTokenRequest with refresh token and username
     public AuthenticationResponse refreshToken(RefreshTokenRequest refreshTokenRequest) {
 //        check if valid, if not, exception will comes up
         refreshTokenService.validateRefreshToken(refreshTokenRequest.getRefreshToken());
